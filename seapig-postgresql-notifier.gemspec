@@ -20,6 +20,6 @@ Gem::Specification.new do |s|
   s.require_paths = ["lib"]
 
   s.add_dependency "activerecord"
-  s.add_dependency "seapig-client-ruby", ">= 0.2.0"
+  s.add_dependency "seapig-client-ruby", ">= 0.2.1"
   s.add_dependency "slop"
 end

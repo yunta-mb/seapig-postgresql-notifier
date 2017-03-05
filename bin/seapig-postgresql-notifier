@@ -12,8 +12,9 @@ STDOUT.sync = true
 OPTIONS = Slop.parse { |o|
 	o.string '-c', '--connect', "Seapig server address (default: ws://127.0.0.1:3001)", default: "ws://127.0.0.1:3001"
 	o.array '-i', '--intervals', 'List of durations for interval objects (e.g. 1,60,3600)', default: ""
-	o.string '-d', '--database-url', 'Database URL (e.g. postgres://USER:PASS@PGHOST/DBNAME)'
+	o.string '-b', '--database-url', 'Database URL (e.g. postgres://USER:PASS@PGHOST/DBNAME)'
 	o.string '-e', '--environment' , 'Rails environment to use when loading database config from config/database.yml'
+	o.bool '-d', '--debug', 'Show debug messages'
 	o.on '-h', '--help' do puts o; exit end
 }
 
@@ -21,26 +22,28 @@ if (not OPTIONS["database-url"]) and (not File.exist?("config/database.yml")) th
 database_config = (OPTIONS["database-url"] or YAML.load_file("config/database.yml")[(OPTIONS["environment"] or ENV["RAILS_ENV"] or "development")])
 ActiveRecord::Base.establish_connection(database_config)
 
+startup_resend_condition = " OR updated_at > (SELECT max(updated_at) FROM seapig_dependencies) - INTERVAL '60 seconds'" # timeout hits in 20-30s so 60s should be safe
 
 EM.run {
 
-	client = SeapigClient.new(OPTIONS["connect"], name: 'notifier')
+	client = SeapigClient.new(OPTIONS["connect"], name: 'notifier', debug: OPTIONS.debug?)
+
 	master_object = client.master(SeapigDependency::OBJECT_PREFIX+"*")
 	master_object.onproduce { |child|
 		version = (SeapigDependency.version(child.id[SeapigDependency::OBJECT_PREFIX.size .. -1]) or 0)
 		child.set(version: version)
-		puts 'Dependency version produced: %30s:%-10s'%[child.id,version]
+		puts 'Dependency version produced: %30s    version: %-10s'%[child.id,version]
 	}
-
 
 	on_database_change = Proc.new {
 		next if not client.connected
-		SeapigDependency.where("current_version != reported_version").each { |seapig_dependency|
-			puts "Dependency version changed: %30s:%-10s"%[seapig_dependency.name,seapig_dependency.current_version]
+		SeapigDependency.where("current_version != reported_version"+startup_resend_condition).each { |seapig_dependency|
+			puts "Dependency version changed, uploading: %30s    version:%-10s"%[seapig_dependency.name,seapig_dependency.current_version]
 			master_object[SeapigDependency::OBJECT_PREFIX+seapig_dependency.name].set(version: seapig_dependency.current_version)
 			seapig_dependency.reported_version = seapig_dependency.current_version
 			seapig_dependency.save!
 		}
+		startup_resend_condition = ""
 	}
 
 
@@ -73,6 +76,6 @@ EM.run {
 		}
 	}
 
-	EM.schedule on_database_change
 
+	client.onstatuschange { EM.schedule on_database_change }
 }
