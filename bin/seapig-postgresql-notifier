@@ -69,8 +69,9 @@ EM.run {
 	}
 
 
-	OPTIONS["intervals"].split(',').each { |interval|
+	OPTIONS["intervals"].each { |interval|
 		seapig = client.master('Seconds:'+interval)
+		seapig.set(version: Time.new.to_i/interval.to_i)
 		EM.add_periodic_timer(interval.to_i) {
 			seapig.set(version: Time.new.to_i/interval.to_i)
 		}
