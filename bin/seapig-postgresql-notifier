@@ -11,7 +11,7 @@ STDOUT.sync = true
 
 OPTIONS = Slop.parse { |o|
 	o.string '-c', '--connect', "Seapig server address (default: ws://127.0.0.1:3001)", default: "ws://127.0.0.1:3001"
-	o.array '-i', '--intervals', 'List of durations for interval objects (e.g. 1,60,3600)', default: ""
+	o.array '-i', '--intervals', 'List of durations for interval objects (e.g. 1,60,3600)', default: []
 	o.string '-b', '--database-url', 'Database URL (e.g. postgres://USER:PASS@PGHOST/DBNAME)'
 	o.string '-e', '--environment' , 'Rails environment to use when loading database config from config/database.yml'
 	o.bool '-d', '--debug', 'Show debug messages'
